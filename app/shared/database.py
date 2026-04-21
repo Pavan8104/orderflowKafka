@@ -20,8 +20,38 @@ def init_db():
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS idempotency_keys (
+            key TEXT PRIMARY KEY,
+            order_id TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
     conn.commit()
     conn.close()
+
+def get_order_by_idempotency_key(key):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute('SELECT order_id FROM idempotency_keys WHERE key = ?', (key,))
+    row = cursor.fetchone()
+    conn.close()
+    return row['order_id'] if row else None
+
+def save_idempotency_key(key, order_id):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            'INSERT INTO idempotency_keys (key, order_id) VALUES (?, ?)',
+            (key, order_id)
+        )
+        conn.commit()
+        return True
+    except sqlite3.IntegrityError:
+        return False
+    finally:
+        conn.close()
 
 def order_exists(order_id):
     conn = get_db_connection()

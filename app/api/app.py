@@ -5,11 +5,15 @@ from flask import Flask, request, jsonify
 from confluent_kafka import Producer
 from dotenv import load_dotenv
 from app.shared.logger import setup_logger
+from app.shared.database import init_db, save_idempotency_key, get_order_by_idempotency_key
 
 load_dotenv()
 
 app = Flask(__name__)
 logger = setup_logger("order-api")
+
+# Initialize DB for idempotency tracking
+init_db()
 
 # Kafka Configuration
 conf = {
@@ -51,9 +55,21 @@ def health_check():
 @app.route('/create-order', methods=['POST'])
 def create_order():
     data = request.get_json()
+    idempotency_key = request.headers.get('Idempotency-Key')
     
     if not data or 'item' not in data or 'amount' not in data:
         return jsonify({"error": "Invalid order data"}), 400
+
+    # Check for existing request with this idempotency key
+    if idempotency_key:
+        existing_order_id = get_order_by_idempotency_key(idempotency_key)
+        if existing_order_id:
+            logger.info("Duplicate request detected, returning existing order", 
+                        extra={"idempotency_key": idempotency_key, "order_id": existing_order_id})
+            return jsonify({
+                "message": "Order already accepted",
+                "order_id": existing_order_id
+            }), 200
 
     order_id = str(uuid.uuid4())
     order_event = {
@@ -64,6 +80,10 @@ def create_order():
     }
 
     try:
+        # If key provided, track it before sending to Kafka
+        if idempotency_key:
+            save_idempotency_key(idempotency_key, order_id)
+
         # Produce message to Kafka
         producer.produce(
             ORDER_TOPIC, 
