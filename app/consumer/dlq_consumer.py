@@ -3,21 +3,18 @@ import json
 import signal
 import sys
 from confluent_kafka import Consumer, KafkaError
-from dotenv import load_dotenv
 from app.shared.logger import setup_logger
-
-load_dotenv()
+from app.shared.config import config
 
 logger = setup_logger("dlq-consumer")
 
 conf = {
-    'bootstrap.servers': os.getenv('KAFKA_BOOTSTRAP_SERVERS', 'localhost:9092'),
+    'bootstrap.servers': config.KAFKA_BOOTSTRAP_SERVERS,
     'group.id': 'dlq-monitoring-group',
     'auto.offset.reset': 'earliest'
 }
 
 consumer = Consumer(conf)
-DLQ_TOPIC = os.getenv('DLQ_TOPIC', 'orders_dlq')
 
 def shutdown(sig, frame):
     logger.info("Shutting down DLQ consumer...")
@@ -28,8 +25,8 @@ signal.signal(signal.SIGINT, shutdown)
 signal.signal(signal.SIGTERM, shutdown)
 
 def monitor_dlq():
-    consumer.subscribe([DLQ_TOPIC])
-    logger.info(f"DLQ Monitor active, watching topic: {DLQ_TOPIC}")
+    consumer.subscribe([config.DLQ_TOPIC])
+    logger.info(f"DLQ Monitor active, watching topic: {config.DLQ_TOPIC}")
 
     while True:
         msg = consumer.poll(1.0)
@@ -48,9 +45,8 @@ def monitor_dlq():
                 "partition": msg.partition(),
                 "offset": msg.offset()
             })
-            # In a real app, you might trigger an email/pager alert here
-        except Exception as e:
-            logger.error("Error decoding DLQ message", extra={"error": str(e)})
+        except Exception:
+            logger.exception("Error decoding DLQ message")
 
 if __name__ == '__main__':
     monitor_dlq()

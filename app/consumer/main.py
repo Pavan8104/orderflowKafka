@@ -3,18 +3,16 @@ import json
 import signal
 import sys
 from confluent_kafka import Consumer, Producer, KafkaError
-from dotenv import load_dotenv
 from app.shared.logger import setup_logger
 from app.shared.database import init_db, save_order, order_exists
 from app.shared.utils import retry
-
-load_dotenv()
+from app.shared.config import config
 
 logger = setup_logger("order-consumer")
 
 # Kafka Configuration
 conf = {
-    'bootstrap.servers': os.getenv('KAFKA_BOOTSTRAP_SERVERS', 'localhost:9092'),
+    'bootstrap.servers': config.KAFKA_BOOTSTRAP_SERVERS,
     'group.id': 'order-processing-group',
     'auto.offset.reset': 'earliest'
 }
@@ -22,9 +20,6 @@ conf = {
 consumer = Consumer(conf)
 # Producer for DLQ - sending failed orders here for manual review
 dlq_producer = Producer({'bootstrap.servers': conf['bootstrap.servers']})
-
-ORDER_TOPIC = os.getenv('ORDER_TOPIC', 'orders')
-DLQ_TOPIC = os.getenv('DLQ_TOPIC', 'orders_dlq')
 
 @retry(max_attempts=3, delay=2)
 def process_single_order(order_data, partition, offset):
@@ -70,7 +65,7 @@ signal.signal(signal.SIGTERM, shutdown)
 
 def process_orders():
     init_db()
-    consumer.subscribe([ORDER_TOPIC])
+    consumer.subscribe([config.ORDER_TOPIC])
     logger.info("Consumer started, listening for orders...")
 
     while True:
@@ -92,15 +87,14 @@ def process_orders():
                 partition=msg.partition(), 
                 offset=msg.offset()
             )
-        except Exception as e:
-            logger.error("Order processing failed after retries, moving to DLQ", extra={
-                "error": str(e),
+        except Exception:
+            logger.exception("Order processing failed after retries, moving to DLQ", extra={
                 "order_id": order_data.get('order_id') if 'order_data' in locals() else "unknown",
                 "partition": msg.partition(),
                 "offset": msg.offset()
             })
             # Push raw message to DLQ
-            dlq_producer.produce(DLQ_TOPIC, value=msg.value(), key=msg.key())
+            dlq_producer.produce(config.DLQ_TOPIC, value=msg.value(), key=msg.key())
             dlq_producer.flush()
 
 if __name__ == '__main__':
