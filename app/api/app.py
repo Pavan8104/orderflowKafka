@@ -58,16 +58,16 @@ def create_order():
     idempotency_key = request.headers.get('Idempotency-Key')
     
     if not data or 'item' not in data or 'amount' not in data:
-        return jsonify({"error": "Invalid order data"}), 400
+        return jsonify({"error": "Missing required fields: item, amount"}), 400
 
     # Check for existing request with this idempotency key
     if idempotency_key:
         existing_order_id = get_order_by_idempotency_key(idempotency_key)
         if existing_order_id:
-            logger.info("Duplicate request detected, returning existing order", 
+            logger.info("Duplicate request detected", 
                         extra={"idempotency_key": idempotency_key, "order_id": existing_order_id})
             return jsonify({
-                "message": "Order already accepted",
+                "message": "Order already processed",
                 "order_id": existing_order_id
             }), 200
 

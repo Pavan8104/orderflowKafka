@@ -60,7 +60,8 @@ def process_single_order(order_data, partition, offset):
     return True
 
 def shutdown(sig, frame):
-    logger.info("Shutting down consumer...")
+    logger.info("Shutting down consumer and flushing producers...")
+    dlq_producer.flush(timeout=5)
     consumer.close()
     sys.exit(0)
 
@@ -81,7 +82,7 @@ def process_orders():
             if msg.error().code() == KafkaError._PARTITION_EOF:
                 continue
             else:
-                logger.error("Consumer error", extra={"error": str(msg.error())})
+                logger.error("Kafka consumer error", extra={"error_code": msg.error().code(), "error_msg": str(msg.error())})
                 break
 
         try:
@@ -92,13 +93,13 @@ def process_orders():
                 offset=msg.offset()
             )
         except Exception as e:
-            logger.error("Failed to process order after retries, sending to DLQ", extra={
+            logger.error("Order processing failed after retries, moving to DLQ", extra={
                 "error": str(e),
                 "order_id": order_data.get('order_id') if 'order_data' in locals() else "unknown",
                 "partition": msg.partition(),
                 "offset": msg.offset()
             })
-            # Push raw message to DLQ so we can re-process it later if needed
+            # Push raw message to DLQ
             dlq_producer.produce(DLQ_TOPIC, value=msg.value(), key=msg.key())
             dlq_producer.flush()
 
