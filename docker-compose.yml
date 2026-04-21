@@ -21,3 +21,35 @@ services:
       KAFKA_CONTROLLER_LISTENER_NAMES: 'CONTROLLER'
       KAFKA_LOG_DIRS: '/tmp/kraft-combined-logs'
       CLUSTER_ID: 'MkU3OEVBNTcwNTJENDM2Qk'
+    healthcheck:
+      test: ["CMD", "kafka-topics", "--bootstrap-server", "localhost:9092", "--list"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  order-api:
+    build: .
+    container_name: order-api
+    ports:
+      - "5000:5000"
+    environment:
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:29092
+      - ORDER_TOPIC=orders
+    depends_on:
+      kafka:
+        condition: service_healthy
+
+  order-consumer:
+    build: .
+    container_name: order-consumer
+    environment:
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:29092
+      - ORDER_TOPIC=orders
+      - DLQ_TOPIC=orders_dlq
+      - DB_PATH=/app/data/orders.db
+    volumes:
+      - ./data:/app/data
+    depends_on:
+      kafka:
+        condition: service_healthy
+    command: python app/consumer/main.py

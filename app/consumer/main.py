@@ -2,7 +2,7 @@ import os
 import json
 import signal
 import sys
-from confluent_kafka import Consumer, KafkaError
+from confluent_kafka import Consumer, Producer, KafkaError
 from dotenv import load_dotenv
 from app.shared.logger import setup_logger
 from app.shared.database import init_db, save_order, order_exists
@@ -20,7 +20,11 @@ conf = {
 }
 
 consumer = Consumer(conf)
+# Producer for DLQ - sending failed orders here for manual review
+dlq_producer = Producer({'bootstrap.servers': conf['bootstrap.servers']})
+
 ORDER_TOPIC = os.getenv('ORDER_TOPIC', 'orders')
+DLQ_TOPIC = os.getenv('DLQ_TOPIC', 'orders_dlq')
 
 @retry(max_attempts=3, delay=2)
 def process_single_order(order_data):
@@ -76,7 +80,13 @@ def process_orders():
             order_data = json.loads(msg.value().decode('utf-8'))
             process_single_order(order_data)
         except Exception as e:
-            logger.error("Failed to process order after retries", extra={"error": str(e)})
+            logger.error("Failed to process order after retries, sending to DLQ", extra={
+                "error": str(e),
+                "order_id": order_data.get('order_id') if 'order_data' in locals() else "unknown"
+            })
+            # Push raw message to DLQ so we can re-process it later if needed
+            dlq_producer.produce(DLQ_TOPIC, value=msg.value(), key=msg.key())
+            dlq_producer.flush()
 
 if __name__ == '__main__':
     process_orders()
