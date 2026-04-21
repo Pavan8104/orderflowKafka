@@ -68,6 +68,7 @@ def create_order():
                 }), 200
         except Exception:
             logger.exception("Idempotency check failed")
+            return jsonify({"error": "Failed to verify order uniqueness"}), 500
 
     order_id = str(uuid.uuid4())
     order_event = {
@@ -81,15 +82,16 @@ def create_order():
         if idempotency_key:
             save_idempotency_key(idempotency_key, order_id)
 
+        # Produce message to Kafka (async)
         producer.produce(
             config.ORDER_TOPIC, 
             key=order_id, 
             value=json.dumps(order_event),
             callback=delivery_report
         )
-        producer.flush()
+        # We don't call flush() here to avoid blocking the request
         
-        logger.info("Order created and sent to Kafka", extra={"order_id": order_id})
+        logger.info("Order accepted", extra={"order_id": order_id})
         
         return jsonify({
             "message": "Order accepted",
@@ -97,7 +99,7 @@ def create_order():
         }), 202
 
     except Exception:
-        logger.exception("Failed to create order")
+        logger.exception("Failed to produce order")
         return jsonify({"error": "Internal server error"}), 500
 
 if __name__ == '__main__':
