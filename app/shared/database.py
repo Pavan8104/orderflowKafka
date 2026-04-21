@@ -4,8 +4,10 @@ import os
 DB_PATH = os.getenv('DB_PATH', 'orders.db')
 
 def get_db_connection():
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(DB_PATH, timeout=10) # Add timeout for busy database
     conn.row_factory = sqlite3.Row
+    # Enable WAL mode for better concurrency between API and Consumer
+    conn.execute('PRAGMA journal_mode=WAL')
     return conn
 
 def init_db():

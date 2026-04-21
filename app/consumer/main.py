@@ -53,10 +53,11 @@ def process_single_order(order_data, partition, offset):
         status='PROCESSED'
     )
     
-    if success:
-        logger.info("Order processed and saved", extra={"order_id": order_id})
+    if not success:
+        raise Exception(f"Failed to save order {order_id} to database")
     
-    return success
+    logger.info("Order processed and saved", extra={"order_id": order_id})
+    return True
 
 def shutdown(sig, frame):
     logger.info("Shutting down consumer...")
