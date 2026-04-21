@@ -56,3 +56,14 @@ services:
       kafka:
         condition: service_healthy
     command: python app/consumer/main.py
+
+  dlq-monitor:
+    build: .
+    container_name: dlq-monitor
+    environment:
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:29092
+      - DLQ_TOPIC=orders_dlq
+    depends_on:
+      kafka:
+        condition: service_healthy
+    command: python app/consumer/dlq_consumer.py

@@ -27,15 +27,22 @@ ORDER_TOPIC = os.getenv('ORDER_TOPIC', 'orders')
 DLQ_TOPIC = os.getenv('DLQ_TOPIC', 'orders_dlq')
 
 @retry(max_attempts=3, delay=2)
-def process_single_order(order_data):
+def process_single_order(order_data, partition, offset):
     order_id = order_data.get('order_id')
     
     # Idempotency check
     if order_exists(order_id):
-        logger.warning("Order already exists, skipping", extra={"order_id": order_id})
+        logger.warning("Order already exists, skipping", 
+                       extra={"order_id": order_id, "partition": partition, "offset": offset})
         return True
 
-    logger.info("Processing order", extra={"order_id": order_id})
+    logger.info("Processing order", 
+                extra={"order_id": order_id, "partition": partition, "offset": offset})
+
+    # Failure Simulation for testing DLQ
+    if order_data.get('item') == 'FAIL':
+        logger.error("Simulated processing failure", extra={"order_id": order_id})
+        raise Exception("Payment gateway timeout (Simulated)")
 
     # Business Logic (e.g., Payment/Inventory) - could fail transients here
     # For now, we just save to DB
@@ -78,11 +85,17 @@ def process_orders():
 
         try:
             order_data = json.loads(msg.value().decode('utf-8'))
-            process_single_order(order_data)
+            process_single_order(
+                order_data, 
+                partition=msg.partition(), 
+                offset=msg.offset()
+            )
         except Exception as e:
             logger.error("Failed to process order after retries, sending to DLQ", extra={
                 "error": str(e),
-                "order_id": order_data.get('order_id') if 'order_data' in locals() else "unknown"
+                "order_id": order_data.get('order_id') if 'order_data' in locals() else "unknown",
+                "partition": msg.partition(),
+                "offset": msg.offset()
             })
             # Push raw message to DLQ so we can re-process it later if needed
             dlq_producer.produce(DLQ_TOPIC, value=msg.value(), key=msg.key())
