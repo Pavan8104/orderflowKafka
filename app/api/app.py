@@ -30,6 +30,24 @@ def delivery_report(err, msg):
             "offset": msg.offset()
         })
 
+@app.route('/health', methods=['GET'])
+def health_check():
+    try:
+        # Check if Kafka is reachable by fetching metadata
+        metadata = producer.list_topics(timeout=2.0)
+        return jsonify({
+            "status": "healthy",
+            "kafka": "connected",
+            "topics_found": len(metadata.topics)
+        }), 200
+    except Exception as e:
+        logger.error("Health check failed", extra={"error": str(e)})
+        return jsonify({
+            "status": "unhealthy",
+            "kafka": "disconnected",
+            "error": str(e)
+        }), 503
+
 @app.route('/create-order', methods=['POST'])
 def create_order():
     data = request.get_json()
