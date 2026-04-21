@@ -6,6 +6,7 @@ from confluent_kafka import Producer
 from app.shared.logger import setup_logger
 from app.shared.database import init_db, save_idempotency_key, get_order_by_idempotency_key
 from app.shared.config import config
+from app.shared.utils import wait_for_kafka
 
 app = Flask(__name__)
 logger = setup_logger("order-api")
@@ -20,6 +21,12 @@ conf = {
 }
 
 producer = Producer(conf)
+
+# Wait for Kafka to be ready before accepting requests
+if not wait_for_kafka(producer):
+    logger.error("Kafka not available, starting anyway but health checks will fail")
+else:
+    logger.info("Kafka connected successfully")
 
 def delivery_report(err, msg):
     if err is not None:

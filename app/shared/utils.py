@@ -29,3 +29,14 @@ def retry(max_attempts=3, delay=1):
             return None
         return wrapper
     return decorator
+
+def wait_for_kafka(producer, timeout=30):
+    """Wait for Kafka to become available by checking metadata."""
+    start_time = time.time()
+    while time.time() - start_time < timeout:
+        try:
+            producer.list_topics(timeout=2.0)
+            return True
+        except Exception:
+            time.sleep(2)
+    return False

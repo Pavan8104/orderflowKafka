@@ -5,7 +5,7 @@ import sys
 from confluent_kafka import Consumer, Producer, KafkaError
 from app.shared.logger import setup_logger
 from app.shared.database import init_db, save_order, order_exists
-from app.shared.utils import retry
+from app.shared.utils import retry, wait_for_kafka
 from app.shared.config import config
 
 logger = setup_logger("order-consumer")
@@ -17,9 +17,16 @@ conf = {
     'auto.offset.reset': 'earliest'
 }
 
-consumer = Consumer(conf)
-# Producer for DLQ - sending failed orders here for manual review
+# Producer for DLQ - also used for health check
 dlq_producer = Producer({'bootstrap.servers': conf['bootstrap.servers']})
+
+# Wait for Kafka before starting consumer
+if not wait_for_kafka(dlq_producer):
+    logger.error("Kafka not available, consumer might fail to start")
+else:
+    logger.info("Kafka connected successfully")
+
+consumer = Consumer(conf)
 
 @retry(max_attempts=3, delay=2)
 def process_single_order(order_data, partition, offset):
