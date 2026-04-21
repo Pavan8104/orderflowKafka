@@ -5,7 +5,8 @@ import sys
 from confluent_kafka import Consumer, KafkaError
 from dotenv import load_dotenv
 from app.shared.logger import setup_logger
-from app.shared.database import init_db, save_order
+from app.shared.database import init_db, save_order, order_exists
+from app.shared.utils import retry
 
 load_dotenv()
 
@@ -20,6 +21,31 @@ conf = {
 
 consumer = Consumer(conf)
 ORDER_TOPIC = os.getenv('ORDER_TOPIC', 'orders')
+
+@retry(max_attempts=3, delay=2)
+def process_single_order(order_data):
+    order_id = order_data.get('order_id')
+    
+    # Idempotency check
+    if order_exists(order_id):
+        logger.warning("Order already exists, skipping", extra={"order_id": order_id})
+        return True
+
+    logger.info("Processing order", extra={"order_id": order_id})
+
+    # Business Logic (e.g., Payment/Inventory) - could fail transients here
+    # For now, we just save to DB
+    success = save_order(
+        order_id=order_id,
+        item=order_data.get('item'),
+        amount=order_data.get('amount'),
+        status='PROCESSED'
+    )
+    
+    if success:
+        logger.info("Order processed and saved", extra={"order_id": order_id})
+    
+    return success
 
 def shutdown(sig, frame):
     logger.info("Shutting down consumer...")
@@ -48,25 +74,9 @@ def process_orders():
 
         try:
             order_data = json.loads(msg.value().decode('utf-8'))
-            order_id = order_data.get('order_id')
-            
-            logger.info("Processing order", extra={"order_id": order_id})
-
-            # Save to database
-            success = save_order(
-                order_id=order_id,
-                item=order_data.get('item'),
-                amount=order_data.get('amount'),
-                status='PROCESSED'
-            )
-
-            if success:
-                logger.info("Order processed and saved", extra={"order_id": order_id})
-            else:
-                logger.warning("Order already exists, skipping", extra={"order_id": order_id})
-
+            process_single_order(order_data)
         except Exception as e:
-            logger.error("Failed to process order", extra={"error": str(e)})
+            logger.error("Failed to process order after retries", extra={"error": str(e)})
 
 if __name__ == '__main__':
     process_orders()

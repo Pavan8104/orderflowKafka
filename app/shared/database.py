@@ -23,6 +23,14 @@ def init_db():
     conn.commit()
     conn.close()
 
+def order_exists(order_id):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute('SELECT 1 FROM orders WHERE order_id = ?', (order_id,))
+    exists = cursor.fetchone() is not None
+    conn.close()
+    return exists
+
 def save_order(order_id, item, amount, status):
     conn = get_db_connection()
     cursor = conn.cursor()
