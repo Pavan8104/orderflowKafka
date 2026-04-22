@@ -244,6 +244,28 @@ def get_my_orders(current_user):
 
     return jsonify({"success": True, "data": {"orders": orders_list}, "error": None}), 200
 
+@app.route('/failed-orders', methods=['GET'])
+@token_required
+def get_failed_orders(current_user):
+    from app.shared.database import get_db_connection
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute('SELECT * FROM failed_orders WHERE username = ? ORDER BY failed_at DESC', (current_user['username'],))
+    failed = cursor.fetchall()
+    conn.close()
+
+    failed_list = []
+    for f in failed:
+        failed_list.append({
+            "order_id": f['order_id'],
+            "item": f['item'],
+            "amount": f['amount'],
+            "error": f['error_message'],
+            "failed_at": f['failed_at']
+        })
+
+    return jsonify({"success": True, "data": {"failed_orders": failed_list}, "error": None}), 200
+
 if __name__ == '__main__':
     # Use PORT from config for local dev
     app.run(host='0.0.0.0', port=config.PORT, debug=config.DEBUG)

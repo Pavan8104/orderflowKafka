@@ -112,21 +112,45 @@ async function loadMyOrders() {
     if (result && result.success) {
         if (result.data.orders.length === 0) {
             ordersList.innerHTML = '<p>No orders yet.</p>';
+        } else {
+            let html = '<table style="width:100%; border-collapse: collapse; margin-top: 10px;">';
+            html += '<tr style="background: #f8f9fa;"><th style="border: 1px solid #ddd; padding: 8px;">Item</th><th style="border: 1px solid #ddd; padding: 8px;">Amount</th><th style="border: 1px solid #ddd; padding: 8px;">Status</th></tr>';
+            
+            result.data.orders.forEach(order => {
+                html += `<tr>
+                    <td style="border: 1px solid #ddd; padding: 8px;">${order.item}</td>
+                    <td style="border: 1px solid #ddd; padding: 8px;">$${order.amount}</td>
+                    <td style="border: 1px solid #ddd; padding: 8px;">${order.status}</td>
+                </tr>`;
+            });
+            html += '</table>';
+            ordersList.innerHTML = html;
+        }
+        loadFailedOrders(); // Also load failed orders
+    }
+}
+
+async function loadFailedOrders() {
+    const failedOrdersList = document.getElementById('failedOrdersList');
+    const result = await apiCall('/failed-orders');
+
+    if (result && result.success) {
+        if (result.data.failed_orders.length === 0) {
+            failedOrdersList.innerHTML = '<p>No failed orders.</p>';
             return;
         }
 
-        let html = '<table style="width:100%; border-collapse: collapse; margin-top: 10px;">';
-        html += '<tr style="background: #f8f9fa;"><th style="border: 1px solid #ddd; padding: 8px;">Item</th><th style="border: 1px solid #ddd; padding: 8px;">Amount</th><th style="border: 1px solid #ddd; padding: 8px;">Status</th></tr>';
+        let html = '<table style="width:100%; border-collapse: collapse; margin-top: 10px; font-size: 0.85rem;">';
+        html += '<tr style="background: #fff5f5;"><th style="border: 1px solid #ddd; padding: 8px;">Item</th><th style="border: 1px solid #ddd; padding: 8px;">Error</th></tr>';
         
-        result.data.orders.forEach(order => {
+        result.data.failed_orders.forEach(order => {
             html += `<tr>
                 <td style="border: 1px solid #ddd; padding: 8px;">${order.item}</td>
-                <td style="border: 1px solid #ddd; padding: 8px;">$${order.amount}</td>
-                <td style="border: 1px solid #ddd; padding: 8px;">${order.status}</td>
+                <td style="border: 1px solid #ddd; padding: 8px; color: #dc3545;">${order.error}</td>
             </tr>`;
         });
         html += '</table>';
-        ordersList.innerHTML = html;
+        failedOrdersList.innerHTML = html;
     }
 }
 

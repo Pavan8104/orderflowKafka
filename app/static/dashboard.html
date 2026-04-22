@@ -35,12 +35,22 @@
                 <p>No orders yet.</p>
             </div>
         </div>
+
+        <div class="failed-orders" style="margin-top: 2rem; border-top: 1px solid #ddd; padding-top: 1rem;">
+            <h3 style="color: #dc3545;">Failed Orders (DLQ)</h3>
+            <div id="failedOrdersList">
+                <p>No failed orders.</p>
+            </div>
+        </div>
     </div>
     <script src="/static/js/app.js"></script>
     <script>
         if (!localStorage.getItem('token')) window.location.href = '/login.html';
         // Load orders on dashboard load
-        window.onload = loadMyOrders;
+        window.onload = () => {
+            loadMyOrders();
+            loadFailedOrders();
+        };
     </script>
 </body>
 </html>

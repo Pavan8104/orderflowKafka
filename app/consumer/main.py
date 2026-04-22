@@ -4,7 +4,7 @@ import signal
 import sys
 from confluent_kafka import Consumer, Producer, KafkaError
 from app.shared.logger import setup_logger
-from app.shared.database import init_db, save_order, order_exists
+from app.shared.database import init_db, save_order, order_exists, save_failed_order
 from app.shared.utils import retry, check_kafka_ready
 from app.shared.config import config
 
@@ -93,12 +93,21 @@ def process_orders():
                 partition=msg.partition(), 
                 offset=msg.offset()
             )
-        except Exception:
+        except Exception as e:
             logger.exception("Order processing failed after retries, moving to DLQ", extra={
                 "order_id": order_data.get('order_id') if 'order_data' in locals() else "unknown",
                 "partition": msg.partition(),
                 "offset": msg.offset()
             })
+            # Save to DB for visibility
+            if 'order_data' in locals():
+                save_failed_order(
+                    order_id=order_data.get('order_id'),
+                    username=order_data.get('username'),
+                    item=order_data.get('item'),
+                    amount=order_data.get('amount'),
+                    error_message=str(e)
+                )
             # Push raw message to DLQ
             dlq_producer.produce(config.DLQ_TOPIC, value=msg.value(), key=msg.key())
             dlq_producer.flush()

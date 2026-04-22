@@ -42,8 +42,32 @@ def init_db():
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS failed_orders (
+            order_id TEXT PRIMARY KEY,
+            username TEXT,
+            item TEXT,
+            amount REAL,
+            error_message TEXT,
+            failed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
     conn.commit()
     conn.close()
+
+def save_failed_order(order_id, username, item, amount, error_message):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            'INSERT INTO failed_orders (order_id, username, item, amount, error_message) VALUES (?, ?, ?, ?, ?)',
+            (order_id, username, item, amount, error_message)
+        )
+        conn.commit()
+    except sqlite3.IntegrityError:
+        pass
+    finally:
+        conn.close()
 
 def create_user(username, password_hash):
     conn = get_db_connection()
