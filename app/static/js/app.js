@@ -1,6 +1,37 @@
 const API_URL = '';
+let cart = [];
 
-// Helper for API calls to handle auth redirection
+// --- UI Helpers ---
+
+function showToast(message, type = 'info') {
+    const container = document.getElementById('toastContainer');
+    const toast = document.createElement('div');
+    toast.className = 'toast';
+    toast.innerText = message;
+    if (type === 'error') toast.style.background = '#dc3545';
+    container.appendChild(toast);
+    setTimeout(() => toast.remove(), 3000);
+}
+
+function getStatusBadge(status) {
+    const s = status.toLowerCase();
+    if (s === 'processed' || s === 'completed') return '<span class="badge badge-success">🟢 Completed</span>';
+    if (s === 'failed') return '<span class="badge badge-failed">🔴 Failed</span>';
+    return '<span class="badge badge-pending">🟡 Processing</span>';
+}
+
+function updateUserGreeting() {
+    const token = localStorage.getItem('token');
+    if (token) {
+        try {
+            const payload = JSON.parse(atob(token.split('.')[1]));
+            document.getElementById('userGreeting').innerText = `Welcome back, ${payload.username}!`;
+        } catch (e) { /* silent fail */ }
+    }
+}
+
+// --- API Wrapper ---
+
 async function apiCall(endpoint, options = {}) {
     const token = localStorage.getItem('token');
     if (token) {
@@ -10,43 +41,145 @@ async function apiCall(endpoint, options = {}) {
         };
     }
 
-    const res = await fetch(`${API_URL}${endpoint}`, options);
-    
-    // If token expired or invalid, redirect to login
-    if (res.status === 401 && !endpoint.includes('/login')) {
-        localStorage.removeItem('token');
-        window.location.href = '/login.html';
+    try {
+        const res = await fetch(`${API_URL}${endpoint}`, options);
+        if (res.status === 401 && !endpoint.includes('/login')) {
+            localStorage.removeItem('token');
+            window.location.href = '/login.html';
+            return null;
+        }
+        return await res.json();
+    } catch (e) {
+        showToast('Connection lost. Is the server running?', 'error');
         return null;
     }
-    
-    return res.json();
 }
 
-async function handleRegister() {
-    const username = document.getElementById('username').value;
-    const password = document.getElementById('password').value;
-    const errorDiv = document.getElementById('error');
-    const btn = document.querySelector('button');
+// --- Dashboard Logic ---
 
+function renderProducts() {
+    const grid = document.getElementById('productsGrid');
+    grid.innerHTML = PRODUCTS.map(p => `
+        <div class="product-item" onclick="addToCart(${p.id})">
+            <span class="product-icon">${p.icon}</span>
+            <div class="product-name">${p.name}</div>
+            <div class="product-price">$${p.price.toFixed(2)}</div>
+        </div>
+    `).join('');
+}
+
+function addToCart(productId) {
+    const product = PRODUCTS.find(p => p.id === productId);
+    cart.push(product);
+    updateCartUI();
+    showToast(`Added ${product.name} to cart 🛒`);
+}
+
+function updateCartUI() {
+    const itemsList = document.getElementById('cartItems');
+    const totalDiv = document.getElementById('cartTotal');
+    const totalSpan = document.getElementById('totalAmount');
+
+    if (cart.length === 0) {
+        itemsList.innerHTML = '<p class="empty-state">Select items to start</p>';
+        totalDiv.style.display = 'none';
+        return;
+    }
+
+    itemsList.innerHTML = cart.map((item, index) => `
+        <div class="cart-item">
+            <span>${item.name}</span>
+            <strong>$${item.price.toFixed(2)}</strong>
+        </div>
+    `).join('');
+
+    const total = cart.reduce((sum, item) => sum + item.price, 0);
+    totalSpan.innerText = `$${total.toFixed(2)}`;
+    totalDiv.style.display = 'block';
+}
+
+async function checkout() {
+    const btn = document.getElementById('placeOrderBtn');
+    const originalText = btn.innerText;
+    
     btn.disabled = true;
-    btn.innerText = 'Registering...';
+    btn.innerText = 'Processing Order...';
 
-    const result = await apiCall('/register', {
+    // In this app, we process one consolidated order for simplicity
+    const payload = {
+        item: cart.length === 1 ? cart[0].name : `${cart.length} items (Bulk Order)`,
+        amount: cart.reduce((sum, item) => sum + item.price, 0)
+    };
+
+    const result = await apiCall('/create-order', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password })
+        body: JSON.stringify(payload)
     });
 
     btn.disabled = false;
-    btn.innerText = 'Register';
+    btn.innerText = originalText;
 
     if (result && result.success) {
-        alert('Registration successful! Please login.');
-        window.location.href = '/login.html';
+        showToast('Order placed successfully! 🚀');
+        cart = [];
+        updateCartUI();
+        loadMyOrders();
     } else if (result) {
-        errorDiv.innerText = result.error;
+        showToast(result.error || 'Checkout failed', 'error');
     }
 }
+
+async function loadMyOrders() {
+    const ordersList = document.getElementById('ordersList');
+    const result = await apiCall('/my-orders');
+
+    if (result && result.success) {
+        if (result.data.orders.length === 0) {
+            ordersList.innerHTML = '<div class="empty-state">No orders yet. Start by adding products.</div>';
+            return;
+        }
+
+        let html = '<table>';
+        html += '<thead><tr><th>Date</th><th>Description</th><th>Total</th><th>Status</th></tr></thead><tbody>';
+        
+        result.data.orders.forEach(order => {
+            const date = new Date(order.created_at).toLocaleDateString();
+            html += `<tr>
+                <td style="color: #636e72; font-size: 0.8rem;">${date}</td>
+                <td style="font-weight: 600;">${order.item}</td>
+                <td>$${order.amount.toFixed(2)}</td>
+                <td>${getStatusBadge(order.status)}</td>
+            </tr>`;
+        });
+        html += '</tbody></table>';
+        ordersList.innerHTML = html;
+    }
+}
+
+async function loadFailedOrders() {
+    const failedOrdersList = document.getElementById('failedOrdersList');
+    const result = await apiCall('/failed-orders');
+
+    if (result && result.success) {
+        if (result.data.failed_orders.length === 0) {
+            failedOrdersList.innerHTML = '<div class="empty-state">System healthy. No failures detected.</div>';
+            return;
+        }
+
+        let html = '<table><thead><tr><th>Description</th><th>Reason</th></tr></thead><tbody>';
+        result.data.failed_orders.forEach(order => {
+            html += `<tr>
+                <td style="font-weight: 600;">${order.item}</td>
+                <td style="color: #dc3545;">${order.error}</td>
+            </tr>`;
+        });
+        html += '</tbody></table>';
+        failedOrdersList.innerHTML = html;
+    }
+}
+
+// --- Auth ---
 
 async function handleLogin() {
     const username = document.getElementById('username').value;
@@ -55,7 +188,7 @@ async function handleLogin() {
     const btn = document.querySelector('button');
 
     btn.disabled = true;
-    btn.innerText = 'Logging in...';
+    btn.innerText = 'Verifying...';
 
     const result = await apiCall('/login', {
         method: 'POST',
@@ -71,118 +204,6 @@ async function handleLogin() {
         window.location.href = '/dashboard.html';
     } else if (result) {
         errorDiv.innerText = result.error;
-    }
-}
-
-async function createOrder() {
-    const item = document.getElementById('item').value;
-    const amount = document.getElementById('amount').value;
-    const errorDiv = document.getElementById('orderError');
-    const btn = document.querySelector('.order-form button');
-
-    if (!item || !amount) return alert('Please fill in all fields');
-
-    btn.disabled = true;
-    btn.innerText = 'Placing Order...';
-
-    const result = await apiCall('/create-order', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ item, amount })
-    });
-
-    btn.disabled = false;
-    btn.innerText = 'Place Order';
-
-    if (result && result.success) {
-        alert(`Order placed! Order ID: ${result.data.order_id}`);
-        document.getElementById('orderId').value = result.data.order_id;
-        document.getElementById('item').value = '';
-        document.getElementById('amount').value = '';
-        loadMyOrders(); // Refresh history
-    } else if (result) {
-        errorDiv.innerText = result.error;
-    }
-}
-
-async function loadMyOrders() {
-    const ordersList = document.getElementById('ordersList');
-    ordersList.innerHTML = '<p>Loading orders...</p>';
-    const result = await apiCall('/my-orders');
-
-    if (result && result.success) {
-        if (result.data.orders.length === 0) {
-            ordersList.innerHTML = '<p>No orders yet.</p>';
-        } else {
-            let html = '<table style="width:100%; border-collapse: collapse; margin-top: 10px; font-size: 0.9rem;">';
-            html += '<tr style="background: #f8f9fa;"><th style="border: 1px solid #ddd; padding: 8px;">Date</th><th style="border: 1px solid #ddd; padding: 8px;">Item</th><th style="border: 1px solid #ddd; padding: 8px;">Amount</th><th style="border: 1px solid #ddd; padding: 8px;">Status</th></tr>';
-
-            result.data.orders.forEach(order => {
-                const date = new Date(order.created_at).toLocaleString();
-                html += `<tr>
-                    <td style="border: 1px solid #ddd; padding: 8px; color: #666; font-size: 0.8rem;">${date}</td>
-                    <td style="border: 1px solid #ddd; padding: 8px;">${order.item}</td>
-                    <td style="border: 1px solid #ddd; padding: 8px;">$${order.amount}</td>
-                    <td style="border: 1px solid #ddd; padding: 8px;"><strong>${order.status}</strong></td>
-                </tr>`;
-            });
-            html += '</table>';
-
-            ordersList.innerHTML = html;
-        }
-        loadFailedOrders(); // Also load failed orders
-    }
-}
-
-async function loadFailedOrders() {
-    const failedOrdersList = document.getElementById('failedOrdersList');
-    failedOrdersList.innerHTML = '<p>Loading failed orders...</p>';
-    const result = await apiCall('/failed-orders');
-
-    if (result && result.success) {
-        if (result.data.failed_orders.length === 0) {
-            failedOrdersList.innerHTML = '<p>No failed orders.</p>';
-            return;
-        }
-
-        let html = '<table style="width:100%; border-collapse: collapse; margin-top: 10px; font-size: 0.85rem;">';
-        html += '<tr style="background: #fff5f5;"><th style="border: 1px solid #ddd; padding: 8px;">Item</th><th style="border: 1px solid #ddd; padding: 8px;">Error</th></tr>';
-        
-        result.data.failed_orders.forEach(order => {
-            html += `<tr>
-                <td style="border: 1px solid #ddd; padding: 8px;">${order.item}</td>
-                <td style="border: 1px solid #ddd; padding: 8px; color: #dc3545;">${order.error}</td>
-            </tr>`;
-        });
-        html += '</table>';
-        failedOrdersList.innerHTML = html;
-    }
-}
-
-async function checkStatus() {
-    const orderId = document.getElementById('orderId').value;
-    const statusResult = document.getElementById('statusResult');
-    const btn = document.querySelector('.order-status button');
-
-    if (!orderId) return alert('Enter Order ID');
-
-    btn.disabled = true;
-    btn.innerText = 'Checking...';
-
-    const result = await apiCall(`/order-status/${orderId}`);
-
-    btn.disabled = false;
-    btn.innerText = 'Check Status';
-
-    if (result) {
-        statusResult.style.display = 'block';
-        if (result.success) {
-            statusResult.innerHTML = `<strong>Status:</strong> ${result.data.status}<br><strong>Item:</strong> ${result.data.item}`;
-            statusResult.style.color = '#333';
-        } else {
-            statusResult.innerText = result.error;
-            statusResult.style.color = '#dc3545';
-        }
     }
 }
 
