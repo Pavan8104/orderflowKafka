@@ -86,6 +86,9 @@ def register():
     if not data or 'username' not in data or 'password' not in data:
         return jsonify({"success": False, "data": None, "error": "Username and password required"}), 400
 
+    if len(data['password']) < 6:
+        return jsonify({"success": False, "data": None, "error": "Password must be at least 6 characters"}), 400
+
     hashed_pw = bcrypt.hashpw(data['password'].encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
     if create_user(data['username'], hashed_pw):
         return jsonify({"success": True, "data": {"message": "User registered"}, "error": None}), 201
@@ -133,6 +136,13 @@ def create_order(current_user):
     
     if not data or 'item' not in data or 'amount' not in data:
         return jsonify({"success": False, "data": None, "error": "Missing required fields: item, amount"}), 400
+
+    try:
+        amount = float(data['amount'])
+        if amount <= 0:
+            return jsonify({"success": False, "data": None, "error": "Amount must be greater than zero"}), 400
+    except (ValueError, TypeError):
+        return jsonify({"success": False, "data": None, "error": "Invalid amount format"}), 400
 
     if idempotency_key:
         try:

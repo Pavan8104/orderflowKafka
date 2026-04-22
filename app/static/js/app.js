@@ -1,21 +1,49 @@
 const API_URL = '';
 
+// Helper for API calls to handle auth redirection
+async function apiCall(endpoint, options = {}) {
+    const token = localStorage.getItem('token');
+    if (token) {
+        options.headers = {
+            ...options.headers,
+            'Authorization': `Bearer ${token}`
+        };
+    }
+
+    const res = await fetch(`${API_URL}${endpoint}`, options);
+    
+    // If token expired or invalid, redirect to login
+    if (res.status === 401 && !endpoint.includes('/login')) {
+        localStorage.removeItem('token');
+        window.location.href = '/login.html';
+        return null;
+    }
+    
+    return res.json();
+}
+
 async function handleRegister() {
     const username = document.getElementById('username').value;
     const password = document.getElementById('password').value;
     const errorDiv = document.getElementById('error');
+    const btn = document.querySelector('button');
 
-    const res = await fetch(`${API_URL}/register`, {
+    btn.disabled = true;
+    btn.innerText = 'Registering...';
+
+    const result = await apiCall('/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password })
     });
 
-    const result = await res.json();
-    if (result.success) {
+    btn.disabled = false;
+    btn.innerText = 'Register';
+
+    if (result && result.success) {
         alert('Registration successful! Please login.');
         window.location.href = '/login.html';
-    } else {
+    } else if (result) {
         errorDiv.innerText = result.error;
     }
 }
@@ -24,18 +52,24 @@ async function handleLogin() {
     const username = document.getElementById('username').value;
     const password = document.getElementById('password').value;
     const errorDiv = document.getElementById('error');
+    const btn = document.querySelector('button');
 
-    const res = await fetch(`${API_URL}/login`, {
+    btn.disabled = true;
+    btn.innerText = 'Logging in...';
+
+    const result = await apiCall('/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password })
     });
 
-    const result = await res.json();
-    if (result.success) {
+    btn.disabled = false;
+    btn.innerText = 'Login';
+
+    if (result && result.success) {
         localStorage.setItem('token', result.data.token);
         window.location.href = '/dashboard.html';
-    } else {
+    } else if (result) {
         errorDiv.innerText = result.error;
     }
 }
@@ -44,22 +78,28 @@ async function createOrder() {
     const item = document.getElementById('item').value;
     const amount = document.getElementById('amount').value;
     const errorDiv = document.getElementById('orderError');
-    const token = localStorage.getItem('token');
+    const btn = document.querySelector('.order-form button');
 
-    const res = await fetch(`${API_URL}/create-order`, {
+    if (!item || !amount) return alert('Please fill in all fields');
+
+    btn.disabled = true;
+    btn.innerText = 'Placing Order...';
+
+    const result = await apiCall('/create-order', {
         method: 'POST',
-        headers: { 
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ item, amount })
     });
 
-    const result = await res.json();
-    if (result.success) {
+    btn.disabled = false;
+    btn.innerText = 'Place Order';
+
+    if (result && result.success) {
         alert(`Order placed! Order ID: ${result.data.order_id}`);
         document.getElementById('orderId').value = result.data.order_id;
-    } else {
+        document.getElementById('item').value = '';
+        document.getElementById('amount').value = '';
+    } else if (result) {
         errorDiv.innerText = result.error;
     }
 }
@@ -67,22 +107,27 @@ async function createOrder() {
 async function checkStatus() {
     const orderId = document.getElementById('orderId').value;
     const statusResult = document.getElementById('statusResult');
-    const token = localStorage.getItem('token');
+    const btn = document.querySelector('.order-status button');
 
     if (!orderId) return alert('Enter Order ID');
 
-    const res = await fetch(`${API_URL}/order-status/${orderId}`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-    });
+    btn.disabled = true;
+    btn.innerText = 'Checking...';
 
-    const result = await res.json();
-    statusResult.style.display = 'block';
-    if (result.success) {
-        statusResult.innerHTML = `<strong>Status:</strong> ${result.data.status}<br><strong>Item:</strong> ${result.data.item}`;
-        statusResult.style.color = '#333';
-    } else {
-        statusResult.innerText = result.error;
-        statusResult.style.color = '#dc3545';
+    const result = await apiCall(`/order-status/${orderId}`);
+
+    btn.disabled = false;
+    btn.innerText = 'Check Status';
+
+    if (result) {
+        statusResult.style.display = 'block';
+        if (result.success) {
+            statusResult.innerHTML = `<strong>Status:</strong> ${result.data.status}<br><strong>Item:</strong> ${result.data.item}`;
+            statusResult.style.color = '#333';
+        } else {
+            statusResult.innerText = result.error;
+            statusResult.style.color = '#dc3545';
+        }
     }
 }
 
