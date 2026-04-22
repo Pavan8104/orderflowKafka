@@ -107,23 +107,27 @@ async function createOrder() {
 
 async function loadMyOrders() {
     const ordersList = document.getElementById('ordersList');
+    ordersList.innerHTML = '<p>Loading orders...</p>';
     const result = await apiCall('/my-orders');
 
     if (result && result.success) {
         if (result.data.orders.length === 0) {
             ordersList.innerHTML = '<p>No orders yet.</p>';
         } else {
-            let html = '<table style="width:100%; border-collapse: collapse; margin-top: 10px;">';
-            html += '<tr style="background: #f8f9fa;"><th style="border: 1px solid #ddd; padding: 8px;">Item</th><th style="border: 1px solid #ddd; padding: 8px;">Amount</th><th style="border: 1px solid #ddd; padding: 8px;">Status</th></tr>';
-            
+            let html = '<table style="width:100%; border-collapse: collapse; margin-top: 10px; font-size: 0.9rem;">';
+            html += '<tr style="background: #f8f9fa;"><th style="border: 1px solid #ddd; padding: 8px;">Date</th><th style="border: 1px solid #ddd; padding: 8px;">Item</th><th style="border: 1px solid #ddd; padding: 8px;">Amount</th><th style="border: 1px solid #ddd; padding: 8px;">Status</th></tr>';
+
             result.data.orders.forEach(order => {
+                const date = new Date(order.created_at).toLocaleString();
                 html += `<tr>
+                    <td style="border: 1px solid #ddd; padding: 8px; color: #666; font-size: 0.8rem;">${date}</td>
                     <td style="border: 1px solid #ddd; padding: 8px;">${order.item}</td>
                     <td style="border: 1px solid #ddd; padding: 8px;">$${order.amount}</td>
-                    <td style="border: 1px solid #ddd; padding: 8px;">${order.status}</td>
+                    <td style="border: 1px solid #ddd; padding: 8px;"><strong>${order.status}</strong></td>
                 </tr>`;
             });
             html += '</table>';
+
             ordersList.innerHTML = html;
         }
         loadFailedOrders(); // Also load failed orders
@@ -132,6 +136,7 @@ async function loadMyOrders() {
 
 async function loadFailedOrders() {
     const failedOrdersList = document.getElementById('failedOrdersList');
+    failedOrdersList.innerHTML = '<p>Loading failed orders...</p>';
     const result = await apiCall('/failed-orders');
 
     if (result && result.success) {
