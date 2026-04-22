@@ -3,53 +3,80 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard - OrderFlow</title>
+    <title>OrderFlow - Dashboard</title>
     <link rel="stylesheet" href="/static/css/style.css">
 </head>
 <body>
-    <div class="container" id="dashboard">
-        <div style="display: flex; justify-content: space-between; align-items: center;">
-            <h2>Dashboard</h2>
-            <button onclick="logout()" style="width: auto; padding: 0.5rem 1rem; background: #6c757d;">Logout</button>
+    <nav class="navbar">
+        <div class="brand">OrderFlow</div>
+        <div class="user-menu" style="display: flex; align-items: center; gap: 1rem;">
+            <span id="userGreeting" style="font-weight: 600; color: var(--text-muted);">Welcome!</span>
+            <button onclick="logout()" class="btn-secondary" style="padding: 0.5rem 1rem; border-radius: 8px;">Sign Out</button>
         </div>
-        
-        <div class="order-form">
-            <h3>Create New Order</h3>
-            <div id="orderError" class="error"></div>
-            <input type="text" id="item" placeholder="Item Name (e.g. Laptop)" required>
-            <input type="number" id="amount" placeholder="Amount" required>
-            <button onclick="createOrder()">Place Order</button>
-        </div>
+    </nav>
 
-        <div class="order-status">
-            <h3>Check Order Status</h3>
-            <input type="text" id="orderId" placeholder="Enter Order ID">
-            <button onclick="checkStatus()" style="background-color: #28a745;">Check Status</button>
-            <div id="statusResult" class="status-box"></div>
-        </div>
-
-        <div class="order-history">
-            <h3>My Orders</h3>
-            <button onclick="loadMyOrders()" style="width: auto; margin-bottom: 1rem; background-color: #17a2b8;">Refresh History</button>
-            <div id="ordersList">
-                <p>No orders yet.</p>
+    <div class="main-container">
+        <!-- Products Column -->
+        <div class="products-section">
+            <h3 style="margin-bottom: 1.5rem;">Product Catalog</h3>
+            <div id="productsGrid" class="products-grid">
+                <!-- Loaded from products.js -->
             </div>
         </div>
 
-        <div class="failed-orders" style="margin-top: 2rem; border-top: 1px solid #ddd; padding-top: 1rem;">
-            <h3 style="color: #dc3545;">Failed Orders (DLQ)</h3>
-            <div id="failedOrdersList">
-                <p>No failed orders.</p>
+        <!-- Cart Column -->
+        <div class="cart-sticky">
+            <div class="card">
+                <h3>Your Cart</h3>
+                <div id="cartItems">
+                    <p class="empty-state" style="padding: 1rem;">Select items to start</p>
+                </div>
+                <div id="cartTotal" style="margin-top: 1.5rem; border-top: 2px solid #f5f7fa; padding-top: 1rem; display: none;">
+                    <div style="display: flex; justify-content: space-between; font-weight: 800; font-size: 1.1rem; margin-bottom: 1rem;">
+                        <span>Total</span>
+                        <span id="totalAmount">$0.00</span>
+                    </div>
+                    <button id="placeOrderBtn" onclick="checkout()" style="width: 100%;">Place Order 🚀</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Orders Column (Full Width) -->
+        <div class="full-width">
+            <div class="card">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                    <h3 style="margin: 0;">Order History</h3>
+                    <button onclick="loadMyOrders()" class="btn-secondary" style="padding: 0.5rem 1rem; font-size: 0.8rem;">Refresh Orders</button>
+                </div>
+                <div id="ordersList">
+                    <div class="empty-state">No orders yet. Start by adding products.</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="full-width">
+            <div class="card" style="border: 1px solid #ffe5e5; background: #fffdfd;">
+                <h3 style="color: #c53030;">Failed Orders (DLQ)</h3>
+                <div id="failedOrdersList">
+                    <div class="empty-state">System healthy. No failures detected.</div>
+                </div>
             </div>
         </div>
     </div>
+
+    <div id="toastContainer" class="toast-container"></div>
+
+    <script src="/static/js/products.js"></script>
     <script src="/static/js/app.js"></script>
     <script>
         if (!localStorage.getItem('token')) window.location.href = '/login.html';
-        // Load orders on dashboard load
+        
+        // Initial setup
         window.onload = () => {
+            renderProducts();
             loadMyOrders();
             loadFailedOrders();
+            updateUserGreeting();
         };
     </script>
 </body>
