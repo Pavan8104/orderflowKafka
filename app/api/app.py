@@ -1,20 +1,49 @@
 import os
 import json
 import uuid
+import jwt
+import bcrypt
+import datetime
+from functools import wraps
 from flask import Flask, request, jsonify
 from confluent_kafka import Producer
 from app.shared.logger import setup_logger
-from app.shared.database import init_db, save_idempotency_key, get_order_by_idempotency_key
+from app.shared.database import init_db, save_idempotency_key, get_order_by_idempotency_key, create_user, get_user
 from app.shared.config import config
 from app.shared.utils import check_kafka_ready
 
 app = Flask(__name__)
 logger = setup_logger("order-api")
 
-# Initialize DB for idempotency tracking
+# Initialize DB for user and idempotency tracking
 init_db()
 
-# Kafka Configuration
+# --- Auth Helpers ---
+
+def token_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        token = None
+        if 'Authorization' in request.headers:
+            auth_header = request.headers['Authorization']
+            if auth_header.startswith('Bearer '):
+                token = auth_header.split(" ")[1]
+
+        if not token:
+            return jsonify({"success": False, "data": None, "error": "Token is missing"}), 401
+
+        try:
+            data = jwt.decode(token, config.SECRET_KEY, algorithms=["HS256"])
+            current_user = get_user(data['username'])
+            if not current_user:
+                return jsonify({"success": False, "data": None, "error": "Invalid token"}), 401
+        except Exception:
+            return jsonify({"success": False, "data": None, "error": "Invalid or expired token"}), 401
+
+        return f(current_user, *args, **kwargs)
+    return decorated
+
+# --- Kafka Configuration ---
 conf = {
     'bootstrap.servers': config.KAFKA_BOOTSTRAP_SERVERS,
     'client.id': 'order-api'
@@ -36,6 +65,36 @@ def delivery_report(err, msg):
             "offset": msg.offset()
         })
 
+# --- Auth Endpoints ---
+
+@app.route('/register', methods=['POST'])
+def register():
+    data = request.get_json()
+    if not data or 'username' not in data or 'password' not in data:
+        return jsonify({"success": False, "data": None, "error": "Username and password required"}), 400
+
+    hashed_pw = bcrypt.hashpw(data['password'].encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+    if create_user(data['username'], hashed_pw):
+        return jsonify({"success": True, "data": {"message": "User registered"}, "error": None}), 201
+    return jsonify({"success": False, "data": None, "error": "User already exists"}), 400
+
+@app.route('/login', methods=['POST'])
+def login():
+    data = request.get_json()
+    if not data or 'username' not in data or 'password' not in data:
+        return jsonify({"success": False, "data": None, "error": "Username and password required"}), 400
+
+    user = get_user(data['username'])
+    if user and bcrypt.checkpw(data['password'].encode('utf-8'), user['password_hash'].encode('utf-8')):
+        token = jwt.encode({
+            'username': user['username'],
+            'exp': datetime.datetime.utcnow() + datetime.timedelta(hours=24)
+        }, config.SECRET_KEY, algorithm="HS256")
+        
+        return jsonify({"success": True, "data": {"token": token}, "error": None}), 200
+    
+    return jsonify({"success": False, "data": None, "error": "Invalid credentials"}), 401
+
 @app.route('/health', methods=['GET'])
 def health_check():
     try:
@@ -54,12 +113,13 @@ def health_check():
         }), 503
 
 @app.route('/create-order', methods=['POST'])
-def create_order():
+@token_required
+def create_order(current_user):
     data = request.get_json()
     idempotency_key = request.headers.get('Idempotency-Key')
     
     if not data or 'item' not in data or 'amount' not in data:
-        return jsonify({"error": "Missing required fields: item, amount"}), 400
+        return jsonify({"success": False, "data": None, "error": "Missing required fields: item, amount"}), 400
 
     if idempotency_key:
         try:
@@ -68,16 +128,21 @@ def create_order():
                 logger.info("Duplicate request detected", 
                             extra={"idempotency_key": idempotency_key, "order_id": existing_order_id})
                 return jsonify({
-                    "message": "Order already processed",
-                    "order_id": existing_order_id
+                    "success": True,
+                    "data": {
+                        "message": "Order already processed",
+                        "order_id": existing_order_id
+                    },
+                    "error": None
                 }), 200
         except Exception:
             logger.exception("Idempotency check failed")
-            return jsonify({"error": "Failed to verify order uniqueness"}), 500
+            return jsonify({"success": False, "data": None, "error": "Failed to verify order uniqueness"}), 500
 
     order_id = str(uuid.uuid4())
     order_event = {
         "order_id": order_id,
+        "username": current_user['username'],
         "item": data['item'],
         "amount": data['amount'],
         "status": "PENDING"
@@ -94,18 +159,45 @@ def create_order():
             value=json.dumps(order_event),
             callback=delivery_report
         )
-        # We don't call flush() here to avoid blocking the request
         
-        logger.info("Order accepted", extra={"order_id": order_id})
+        logger.info("Order accepted", extra={"order_id": order_id, "user": current_user['username']})
         
         return jsonify({
-            "message": "Order accepted",
-            "order_id": order_id
+            "success": True,
+            "data": {
+                "message": "Order accepted",
+                "order_id": order_id
+            },
+            "error": None
         }), 202
 
     except Exception:
         logger.exception("Failed to produce order")
-        return jsonify({"error": "Internal server error"}), 500
+        return jsonify({"success": False, "data": None, "error": "Internal server error"}), 500
+
+@app.route('/order-status/<order_id>', methods=['GET'])
+@token_required
+def get_order_status(current_user, order_id):
+    # This is a simple status check against the DB
+    from app.shared.database import get_db_connection
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute('SELECT * FROM orders WHERE order_id = ?', (order_id,))
+    order = cursor.fetchone()
+    conn.close()
+
+    if order:
+        return jsonify({
+            "success": True, 
+            "data": {
+                "order_id": order['order_id'],
+                "status": order['status'],
+                "item": order['item']
+            }, 
+            "error": None
+        }), 200
+    
+    return jsonify({"success": False, "data": None, "error": "Order not found"}), 404
 
 if __name__ == '__main__':
     # Use PORT from config for local dev

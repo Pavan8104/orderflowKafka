@@ -15,5 +15,6 @@ class Config:
     # API
     PORT = int(os.getenv('PORT', 5000))
     DEBUG = os.getenv('DEBUG', 'False').lower() == 'true'
+    SECRET_KEY = os.getenv('SECRET_KEY', 'dev-secret-key-change-me')
 
 config = Config()
