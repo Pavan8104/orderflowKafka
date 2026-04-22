@@ -5,18 +5,31 @@ import jwt
 import bcrypt
 import datetime
 from functools import wraps
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_from_directory
 from confluent_kafka import Producer
 from app.shared.logger import setup_logger
 from app.shared.database import init_db, save_idempotency_key, get_order_by_idempotency_key, create_user, get_user
 from app.shared.config import config
 from app.shared.utils import check_kafka_ready
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder='../static')
 logger = setup_logger("order-api")
 
 # Initialize DB for user and idempotency tracking
 init_db()
+
+# --- Static Routes ---
+
+@app.route('/')
+def index():
+    return send_from_directory(app.static_folder, 'login.html')
+
+@app.route('/<path:path>')
+def serve_static(path):
+    # Check if the file exists in static folder
+    if os.path.exists(os.path.join(app.static_folder, path)):
+        return send_from_directory(app.static_folder, path)
+    return send_from_directory(app.static_folder, 'login.html')
 
 # --- Auth Helpers ---
 

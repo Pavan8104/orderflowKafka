@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - OrderFlow</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <div class="container" id="dashboard">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <h2>Dashboard</h2>
+            <button onclick="logout()" style="width: auto; padding: 0.5rem 1rem; background: #6c757d;">Logout</button>
+        </div>
+        
+        <div class="order-form">
+            <h3>Create New Order</h3>
+            <div id="orderError" class="error"></div>
+            <input type="text" id="item" placeholder="Item Name (e.g. Laptop)" required>
+            <input type="number" id="amount" placeholder="Amount" required>
+            <button onclick="createOrder()">Place Order</button>
+        </div>
+
+        <div class="order-status">
+            <h3>Check Order Status</h3>
+            <input type="text" id="orderId" placeholder="Enter Order ID">
+            <button onclick="checkStatus()" style="background-color: #28a745;">Check Status</button>
+            <div id="statusResult" class="status-box"></div>
+        </div>
+    </div>
+    <script src="/static/js/app.js"></script>
+    <script>
+        if (!localStorage.getItem('token')) window.location.href = '/login.html';
+    </script>
+</body>
+</html>
