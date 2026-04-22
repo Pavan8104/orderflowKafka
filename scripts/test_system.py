@@ -36,6 +36,6 @@ def run_tests():
     create_order("FAIL", 0.0)
 
 if __name__ == "__main__":
-    # Wait a bit for services to be ready if running for first time
+    # Wait for services to warm up
     print("Starting system tests...")
     run_tests()
