@@ -48,6 +48,7 @@ def process_single_order(order_data, partition, offset):
     # For now, we just save to DB
     success = save_order(
         order_id=order_id,
+        username=order_data.get('username'),
         item=order_data.get('item'),
         amount=order_data.get('amount'),
         status='PROCESSED'

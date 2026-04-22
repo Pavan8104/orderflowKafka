@@ -99,8 +99,34 @@ async function createOrder() {
         document.getElementById('orderId').value = result.data.order_id;
         document.getElementById('item').value = '';
         document.getElementById('amount').value = '';
+        loadMyOrders(); // Refresh history
     } else if (result) {
         errorDiv.innerText = result.error;
+    }
+}
+
+async function loadMyOrders() {
+    const ordersList = document.getElementById('ordersList');
+    const result = await apiCall('/my-orders');
+
+    if (result && result.success) {
+        if (result.data.orders.length === 0) {
+            ordersList.innerHTML = '<p>No orders yet.</p>';
+            return;
+        }
+
+        let html = '<table style="width:100%; border-collapse: collapse; margin-top: 10px;">';
+        html += '<tr style="background: #f8f9fa;"><th style="border: 1px solid #ddd; padding: 8px;">Item</th><th style="border: 1px solid #ddd; padding: 8px;">Amount</th><th style="border: 1px solid #ddd; padding: 8px;">Status</th></tr>';
+        
+        result.data.orders.forEach(order => {
+            html += `<tr>
+                <td style="border: 1px solid #ddd; padding: 8px;">${order.item}</td>
+                <td style="border: 1px solid #ddd; padding: 8px;">$${order.amount}</td>
+                <td style="border: 1px solid #ddd; padding: 8px;">${order.status}</td>
+            </tr>`;
+        });
+        html += '</table>';
+        ordersList.innerHTML = html;
     }
 }
 

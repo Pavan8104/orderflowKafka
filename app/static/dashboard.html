@@ -27,10 +27,20 @@
             <button onclick="checkStatus()" style="background-color: #28a745;">Check Status</button>
             <div id="statusResult" class="status-box"></div>
         </div>
+
+        <div class="order-history">
+            <h3>My Orders</h3>
+            <button onclick="loadMyOrders()" style="width: auto; margin-bottom: 1rem; background-color: #17a2b8;">Refresh History</button>
+            <div id="ordersList">
+                <p>No orders yet.</p>
+            </div>
+        </div>
     </div>
     <script src="/static/js/app.js"></script>
     <script>
         if (!localStorage.getItem('token')) window.location.href = '/login.html';
+        // Load orders on dashboard load
+        window.onload = loadMyOrders;
     </script>
 </body>
 </html>

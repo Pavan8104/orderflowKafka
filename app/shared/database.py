@@ -16,12 +16,18 @@ def init_db():
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS orders (
             order_id TEXT PRIMARY KEY,
+            username TEXT,
             item TEXT NOT NULL,
             amount REAL NOT NULL,
             status TEXT NOT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')
+    # Add username column if it doesn't exist for existing databases
+    try:
+        cursor.execute('ALTER TABLE orders ADD COLUMN username TEXT')
+    except sqlite3.OperationalError:
+        pass  # Column already exists
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS idempotency_keys (
             key TEXT PRIMARY KEY,
@@ -93,18 +99,17 @@ def order_exists(order_id):
     conn.close()
     return exists
 
-def save_order(order_id, item, amount, status):
+def save_order(order_id, username, item, amount, status):
     conn = get_db_connection()
     cursor = conn.cursor()
     try:
         cursor.execute(
-            'INSERT INTO orders (order_id, item, amount, status) VALUES (?, ?, ?, ?)',
-            (order_id, item, amount, status)
+            'INSERT INTO orders (order_id, username, item, amount, status) VALUES (?, ?, ?, ?, ?)',
+            (order_id, username, item, amount, status)
         )
         conn.commit()
         return True
     except sqlite3.IntegrityError:
-        # This will be useful later for idempotency
         return False
     finally:
         conn.close()

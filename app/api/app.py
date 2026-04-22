@@ -222,6 +222,28 @@ def get_order_status(current_user, order_id):
     
     return jsonify({"success": False, "data": None, "error": "Order not found"}), 404
 
+@app.route('/my-orders', methods=['GET'])
+@token_required
+def get_my_orders(current_user):
+    from app.shared.database import get_db_connection
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute('SELECT * FROM orders WHERE username = ? ORDER BY created_at DESC', (current_user['username'],))
+    orders = cursor.fetchall()
+    conn.close()
+
+    orders_list = []
+    for order in orders:
+        orders_list.append({
+            "order_id": order['order_id'],
+            "item": order['item'],
+            "amount": order['amount'],
+            "status": order['status'],
+            "created_at": order['created_at']
+        })
+
+    return jsonify({"success": True, "data": {"orders": orders_list}, "error": None}), 200
+
 if __name__ == '__main__':
     # Use PORT from config for local dev
     app.run(host='0.0.0.0', port=config.PORT, debug=config.DEBUG)
