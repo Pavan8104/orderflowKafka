@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OrderFlow | Kafka-Powered SaaS Dashboard</title>
+    <link rel="stylesheet" href="style.css">
+    <!-- Google Fonts for modern feel -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+
+    <!-- Auth Wrapper: Login & Register -->
+    <div id="auth-container" class="auth-wrapper">
+        <div class="auth-card" id="login-section">
+            <h2>Welcome back</h2>
+            <p class="subtitle">Enter your credentials to access your dashboard</p>
+            <form id="login-form">
+                <div class="form-group">
+                    <label>Email Address</label>
+                    <input type="email" id="login-email" placeholder="name@company.com" required>
+                </div>
+                <div class="form-group">
+                    <label>Password</label>
+                    <input type="password" id="login-password" placeholder="••••••••" required>
+                </div>
+                <button type="submit" class="btn-primary">Sign In</button>
+            </form>
+            <p class="auth-footer">Don't have an account? <a href="#" id="go-to-register">Sign up</a></p>
+        </div>
+
+        <div class="auth-card hidden" id="register-section">
+            <h2>Create account</h2>
+            <p class="subtitle">Join OrderFlow and start processing orders</p>
+            <form id="register-form">
+                <div class="form-group">
+                    <label>Full Name</label>
+                    <input type="text" id="reg-name" placeholder="John Doe" required>
+                </div>
+                <div class="form-group">
+                    <label>Email Address</label>
+                    <input type="email" id="reg-email" placeholder="name@company.com" required>
+                </div>
+                <div class="form-group">
+                    <label>Password</label>
+                    <input type="password" id="reg-password" placeholder="••••••••" required>
+                </div>
+                <button type="submit" class="btn-primary">Get Started</button>
+            </form>
+            <p class="auth-footer">Already have an account? <a href="#" id="go-to-login">Sign in</a></p>
+        </div>
+    </div>
+
+    <!-- Main Dashboard Wrapper (SPA) -->
+    <div id="main-app" class="app-container hidden">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="logo">
+                <span class="logo-icon">📦</span>
+                <span class="logo-text">OrderFlow</span>
+            </div>
+            <nav class="nav-menu">
+                <a href="#" class="nav-item active" data-view="dashboard">
+                    <span class="icon">📊</span> Dashboard
+                </a>
+                <a href="#" class="nav-item" data-view="shop">
+                    <span class="icon">🛒</span> Shop Products
+                </a>
+                <a href="#" class="nav-item" data-view="orders">
+                    <span class="icon">📜</span> My Orders
+                </a>
+            </nav>
+            <div class="sidebar-footer">
+                <button id="logout-btn" class="btn-logout">Logout</button>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="content-area">
+            <header class="top-header">
+                <h1 id="view-title">Dashboard</h1>
+                <div class="user-profile">
+                    <span id="user-name-display">User</span>
+                    <div class="avatar">JD</div>
+                </div>
+            </header>
+
+            <!-- Dynamic Views -->
+            <section id="view-dashboard" class="view">
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <h3>Total Orders</h3>
+                        <p class="stat-value" id="stat-total">0</p>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Kafka Processing</h3>
+                        <p class="stat-value text-blue" id="stat-processing">0</p>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Success Rate</h3>
+                        <p class="stat-value text-green" id="stat-success">0%</p>
+                    </div>
+                </div>
+                <div class="recent-activity">
+                    <h3>Real-time Kafka Stream</h3>
+                    <div id="kafka-stream" class="stream-container">
+                        <!-- Dynamic kafka events will appear here -->
+                        <div class="empty-state">Waiting for events...</div>
+                    </div>
+                </div>
+            </section>
+
+            <section id="view-shop" class="view hidden">
+                <div id="product-grid" class="product-grid">
+                    <!-- Products from products.js will be injected here -->
+                </div>
+            </section>
+
+            <section id="view-orders" class="view hidden">
+                <div class="order-table-container">
+                    <table class="order-table">
+                        <thead>
+                            <tr>
+                                <th>Order ID</th>
+                                <th>Product</th>
+                                <th>Amount</th>
+                                <th>Kafka Status</th>
+                                <th>Timestamp</th>
+                            </tr>
+                        </thead>
+                        <tbody id="order-history-body">
+                            <!-- Orders will be injected here -->
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        </main>
+
+        <!-- Global Kafka Notification (Toast) -->
+        <div id="kafka-toast" class="toast hidden">
+            <div class="toast-content">
+                <div class="spinner"></div>
+                <div class="toast-text">
+                    <strong id="toast-title">Processing...</strong>
+                    <p id="toast-msg">Sending order to Kafka queue</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Cart Overlay -->
+        <div id="cart-drawer" class="cart-drawer hidden">
+            <div class="cart-header">
+                <h3>Your Cart</h3>
+                <button id="close-cart">✕</button>
+            </div>
+            <div id="cart-items" class="cart-items"></div>
+            <div class="cart-footer">
+                <div class="total-row">
+                    <span>Total:</span>
+                    <span id="cart-total">/bin/bash.00</span>
+                </div>
+                <button id="checkout-btn" class="btn-checkout">Create Kafka Order</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="products.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>
