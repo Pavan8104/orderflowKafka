@@ -4,7 +4,7 @@
  */
 
 // --- Configuration ---
-const API_BASE = ""; // Use relative paths for the API
+const API_BASE = "http://localhost:5010";
 
 // --- Application State ---
 let state = {
@@ -232,7 +232,12 @@ async function processOrder() {
 
 function startPolling() {
     fetchOrders();
-    state.pollingInterval = setInterval(fetchOrders, 3000);
+    // Also poll failed orders if needed by the dashboard
+    fetchFailedOrders(); 
+    state.pollingInterval = setInterval(() => {
+        fetchOrders();
+        fetchFailedOrders();
+    }, 3000);
 }
 
 async function fetchOrders() {
@@ -249,6 +254,19 @@ async function fetchOrders() {
         }
     } catch (err) {
         console.error("Polling error:", err);
+    }
+}
+
+async function fetchFailedOrders() {
+    if (!state.token) return;
+
+    try {
+        const res = await fetch(`${API_BASE}/api/failed-orders`, {
+            headers: { 'Authorization': `Bearer ${state.token}` }
+        });
+        // Logic for handling failed orders data could go here if UI supports it
+    } catch (err) {
+        console.error("Failed orders polling error:", err);
     }
 }
 
